@@ -478,16 +478,16 @@
     const hood = (col, row) => {
       const { x, y } = cell(col, row);
       ctx.beginPath();
-      // ▚ = NE + SW quadrants (upper-right + lower-left)
-      ctx.moveTo(x + c, y);
-      ctx.lineTo(x + c, y + c / 2);
-      ctx.lineTo(x + c / 2, y + c / 2);
+      // U+259A ▚ = upper-left + lower-right quadrants (kit hoodCornerRightFacing)
+      ctx.moveTo(x, y);
       ctx.lineTo(x + c / 2, y);
-      ctx.closePath();
-      ctx.moveTo(x, y + c / 2);
       ctx.lineTo(x + c / 2, y + c / 2);
+      ctx.lineTo(x, y + c / 2);
+      ctx.closePath();
+      ctx.moveTo(x + c / 2, y + c / 2);
+      ctx.lineTo(x + c, y + c / 2);
+      ctx.lineTo(x + c, y + c);
       ctx.lineTo(x + c / 2, y + c);
-      ctx.lineTo(x, y + c);
       ctx.closePath();
       ctx.fill();
     };
