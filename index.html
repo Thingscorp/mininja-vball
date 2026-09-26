@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Mininja-vball</title>
+<style>
+  :root {
+    --bg: #0c0b0a;
+    --ink: #f5ebe0;
+    --muted: #9a8f86;
+    --left: #5e6ad2;
+    --right: #e8a691;
+    --ball: #de7356;
+    --ground: #1c1917;
+    --net: #78716c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(900px 480px at 50% -20%, #1a1620 0%, var(--bg) 55%);
+    color: var(--ink);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    gap: 12px;
+  }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.04em; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  canvas {
+    display: block;
+    width: min(960px, 100%);
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid rgba(94, 106, 210, 0.25);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+    background: #111018;
+    cursor: none;
+  }
+  .hud {
+    width: min(960px, 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .lives { font-variant-numeric: tabular-nums; letter-spacing: 0.08em; }
+  .lives b { color: var(--ink); font-weight: 600; }
+  .lives .L { color: var(--left); }
+  .lives .R { color: var(--right); }
+  kbd {
+    font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--ink);
+  }
+</style>
+</head>
+<body>
+  <div class="hud">
+    <h1>Mininja-vball <span>· side quest</span></h1>
+    <div class="lives" id="lives">
+      <span class="L">LEFT</span> <b id="lifeL">●●●●●</b>
+      &nbsp;·&nbsp;
+      <b id="lifeR">●●●●●</b> <span class="R">RIGHT</span>
+    </div>
+  </div>
+  <canvas id="c" width="960" height="540"></canvas>
+  <div class="hud">
+    <div><kbd>A</kbd><kbd>D</kbd><kbd>W</kbd> left · <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd> right · <kbd>Esc</kbd> pause · <kbd>R</kbd> reset</div>
+    <div>unnamed mark · MIT · Thingscorp</div>
+  </div>
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  const GROUND = H - 64;
+  const NET_X = W / 2;
+  const NET_W = 10;
+  const NET_H = 90;
+  const R_SLIME = 44;
+  const R_BALL = 12;
+  const MAX_LIVES = 5;
+  const G = 2200;
+  const MOVE = 420;
+  const JUMP = 820;
+  const MAX_BALL = 920;
+
+  const keys = new Set();
+  addEventListener("keydown", (e) => {
+    keys.add(e.code);
+    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space"].includes(e.code)) e.preventDefault();
+    if (e.code === "Escape") state.paused = !state.paused;
+    if (e.code === "KeyR") resetMatch();
+  });
+  addEventListener("keyup", (e) => keys.delete(e.code));
+
+  function slime(side) {
+    const left = side === "L";
+    return {
+      side,
+      x: left ? W * 0.25 : W * 0.75,
+      y: GROUND,
+      vx: 0,
+      vy: 0,
+      onGround: true,
+      color: left ? "#5e6ad2" : "#e8a691",
+      eye: left ? "#f5ebe0" : "#1c1917",
+      lives: MAX_LIVES,
+    };
+  }
+
+  const state = {
+    L: slime("L"),
+    R: slime("R"),
+    ball: { x: W * 0.25, y: GROUND - 160, vx: 60, vy: 0 },
+    serve: "L",
+    paused: false,
+    over: null, // "L" | "R" winner
+    flash: 0,
+    t: 0,
+  };
+
+  function resetPoint(to) {
+    state.serve = to;
+    state.L.x = W * 0.25; state.L.y = GROUND; state.L.vx = 0; state.L.vy = 0;
+    state.R.x = W * 0.75; state.R.y = GROUND; state.R.vx = 0; state.R.vy = 0;
+    const s = to === "L" ? state.L : state.R;
+    state.ball.x = s.x;
+    state.ball.y = GROUND - R_SLIME - R_BALL - 8;
+    state.ball.vx = to === "L" ? 80 : -80;
+    state.ball.vy = -40;
+    state.flash = 0.35;
+  }
+
+  function resetMatch() {
+    state.L.lives = MAX_LIVES;
+    state.R.lives = MAX_LIVES;
+    state.over = null;
+    state.paused = false;
+    resetPoint("L");
+    paintLives();
+  }
+
+  function paintLives() {
+    const dots = (n) => "●".repeat(n) + "○".repeat(MAX_LIVES - n);
+    document.getElementById("lifeL").textContent = dots(state.L.lives);
+    document.getElementById("lifeR").textContent = dots(state.R.lives);
+  }
+
+  function control(p, left, right, jump) {
+    let ax = 0;
+    if (keys.has(left)) ax -= 1;
+    if (keys.has(right)) ax += 1;
+    p.vx = ax * MOVE;
+    if (jump && p.onGround) {
+      p.vy = -JUMP;
+      p.onGround = false;
+    }
+  }
+
+  function moveSlime(p, dt) {
+    p.vy += G * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    const minX = p.side === "L" ? R_SLIME + 4 : NET_X + NET_W / 2 + R_SLIME + 2;
+    const maxX = p.side === "L" ? NET_X - NET_W / 2 - R_SLIME - 2 : W - R_SLIME - 4;
+    p.x = Math.max(minX, Math.min(maxX, p.x));
+    if (p.y >= GROUND) {
+      p.y = GROUND;
+      p.vy = 0;
+      p.onGround = true;
+    } else {
+      p.onGround = false;
+    }
+  }
+
+  function circleHit(ax, ay, ar, bx, by, br) {
+    const dx = bx - ax, dy = by - ay;
+    const d = Math.hypot(dx, dy) || 1e-6;
+    const overlap = ar + br - d;
+    return overlap > 0 ? { dx, dy, d, overlap } : null;
+  }
+
+  function bounceBallOffSlime(p) {
+    // Only upper semicircle (classic slime): collide if ball center above slime centerline-ish
+    const hit = circleHit(p.x, p.y, R_SLIME, state.ball.x, state.ball.y, R_BALL);
+    if (!hit) return;
+    if (state.ball.y > p.y + 4) return; // under the flat bottom — ignore
+    const nx = hit.dx / hit.d, ny = hit.dy / hit.d;
+    state.ball.x += nx * hit.overlap;
+    state.ball.y += ny * hit.overlap;
+    let rvx = state.ball.vx - p.vx;
+    let rvy = state.ball.vy - p.vy;
+    const vn = rvx * nx + rvy * ny;
+    if (vn < 0) {
+      rvx -= 1.85 * vn * nx;
+      rvy -= 1.85 * vn * ny;
+    }
+    // kick upward bias when near top of slime
+    if (ny < -0.2) rvy -= 120;
+    state.ball.vx = rvx + p.vx * 0.35;
+    state.ball.vy = rvy + p.vy * 0.2;
+    clampBall();
+  }
+
+  function clampBall() {
+    const sp = Math.hypot(state.ball.vx, state.ball.vy);
+    if (sp > MAX_BALL) {
+      state.ball.vx *= MAX_BALL / sp;
+      state.ball.vy *= MAX_BALL / sp;
+    }
+  }
+
+  function moveBall(dt) {
+    const b = state.ball;
+    b.vy += G * dt;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+
+    // walls
+    if (b.x < R_BALL) { b.x = R_BALL; b.vx = Math.abs(b.vx) * 0.92; }
+    if (b.x > W - R_BALL) { b.x = W - R_BALL; b.vx = -Math.abs(b.vx) * 0.92; }
+    if (b.y < R_BALL) { b.y = R_BALL; b.vy = Math.abs(b.vy) * 0.9; }
+
+    // net (thin AABB vs circle)
+    const netL = NET_X - NET_W / 2, netR = NET_X + NET_W / 2;
+    const netTop = GROUND - NET_H;
+    if (b.x + R_BALL > netL && b.x - R_BALL < netR && b.y + R_BALL > netTop && b.y < GROUND) {
+      // push out horizontally preferred
+      const pushL = Math.abs((b.x + R_BALL) - netL);
+      const pushR = Math.abs(netR - (b.x - R_BALL));
+      if (b.y + R_BALL - netTop < Math.min(pushL, pushR) && b.vy > 0) {
+        b.y = netTop - R_BALL;
+        b.vy = -Math.abs(b.vy) * 0.75;
+      } else if (pushL < pushR) {
+        b.x = netL - R_BALL;
+        b.vx = -Math.abs(b.vx) * 0.85;
+      } else {
+        b.x = netR + R_BALL;
+        b.vx = Math.abs(b.vx) * 0.85;
+      }
+    }
+
+    bounceBallOffSlime(state.L);
+    bounceBallOffSlime(state.R);
+
+    // ground point
+    if (b.y + R_BALL >= GROUND) {
+      const loser = b.x < NET_X ? "L" : "R";
+      const other = loser === "L" ? "R" : "L";
+      state[loser].lives = Math.max(0, state[loser].lives - 1);
+      paintLives();
+      if (state[loser].lives <= 0) {
+        state.over = other;
+        state.paused = true;
+      } else {
+        resetPoint(other);
+      }
+    }
+  }
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#16131c");
+    g.addColorStop(1, "#0c0b0a");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // faint stage grid
+    ctx.strokeStyle = "rgba(94,106,210,0.06)";
+    ctx.lineWidth = 1;
+    for (let x = 40; x < W; x += 48) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GROUND); ctx.stroke();
+    }
+    // ground
+    ctx.fillStyle = "#1c1917";
+    ctx.fillRect(0, GROUND, W, H - GROUND);
+    ctx.fillStyle = "rgba(94,106,210,0.35)";
+    ctx.fillRect(0, GROUND, W, 3);
+    // net
+    ctx.fillStyle = "#78716c";
+    ctx.fillRect(NET_X - NET_W / 2, GROUND - NET_H, NET_W, NET_H);
+    ctx.fillStyle = "#a8a29e";
+    ctx.fillRect(NET_X - 14, GROUND - NET_H - 6, 28, 8);
+  }
+
+  function drawSlime(p) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, R_SLIME, Math.PI, 0);
+    ctx.closePath();
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    // Mininja-ish eyes (two dots in the “visor”)
+    const facing = p.vx === 0 ? (p.side === "L" ? 1 : -1) : Math.sign(p.vx) || 1;
+    const eyeY = p.y - R_SLIME * 0.45;
+    const baseX = p.x + facing * 6;
+    ctx.fillStyle = p.eye;
+    ctx.beginPath(); ctx.arc(baseX - 9, eyeY, 4.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(baseX + 9, eyeY, 4.2, 0, Math.PI * 2); ctx.fill();
+    // tiny hood notch hint (mark DNA without full glyph)
+    ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(p.x - R_SLIME * 0.55, p.y - R_SLIME * 0.15);
+    ctx.quadraticCurveTo(p.x - R_SLIME * 0.7, p.y - R_SLIME * 0.55, p.x - R_SLIME * 0.25, p.y - R_SLIME * 0.75);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBall() {
+    const b = state.ball;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, R_BALL, 0, Math.PI * 2);
+    ctx.fillStyle = "#de7356";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(b.x - 3, b.y - 3, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fill();
+  }
+
+  function drawOverlay() {
+    if (state.flash > 0) {
+      ctx.fillStyle = `rgba(245,235,224,${state.flash * 0.25})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (state.paused && !state.over) {
+      banner("paused");
+    }
+    if (state.over) {
+      banner(state.over === "L" ? "left wins · R to rematch" : "right wins · R to rematch");
+    }
+  }
+
+  function banner(text) {
+    ctx.fillStyle = "rgba(12,11,10,0.55)";
+    ctx.fillRect(0, H * 0.38, W, 64);
+    ctx.fillStyle = "#f5ebe0";
+    ctx.font = "600 22px ui-sans-serif, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(text, W / 2, H * 0.38 + 40);
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    state.t += dt;
+    if (state.flash > 0) state.flash = Math.max(0, state.flash - dt);
+
+    if (!state.paused && !state.over) {
+      control(state.L, "KeyA", "KeyD", keys.has("KeyW"));
+      control(state.R, "ArrowLeft", "ArrowRight", keys.has("ArrowUp"));
+      moveSlime(state.L, dt);
+      moveSlime(state.R, dt);
+      moveBall(dt);
+    }
+
+    drawBackground();
+    drawSlime(state.L);
+    drawSlime(state.R);
+    drawBall();
+    drawOverlay();
+    requestAnimationFrame(frame);
+  }
+
+  resetMatch();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
