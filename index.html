@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <title>Mininja-vball</title>
 <style>
   :root {
@@ -12,31 +13,35 @@
     --left: #5e6ad2;
     --right: #e8a691;
     --ball: #de7356;
-    --ground: #1c1917;
-    --net: #78716c;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
   body {
-    min-height: 100vh;
+    min-height: 100%;
+    min-height: 100dvh;
     background: radial-gradient(900px 480px at 50% -20%, #1a1620 0%, var(--bg) 55%);
     color: var(--ink);
     font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
     display: grid;
     place-items: center;
-    padding: 24px;
-    gap: 12px;
+    padding: 12px;
+    gap: 8px;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
   h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.04em; }
-  h1 span { color: var(--muted); font-weight: 400; }
   canvas {
     display: block;
     width: min(960px, 100%);
     height: auto;
+    max-height: min(540px, calc(100dvh - 140px));
     border-radius: 12px;
     border: 1px solid rgba(94, 106, 210, 0.25);
     box-shadow: 0 24px 64px rgba(0,0,0,0.45);
     background: #111018;
-    cursor: none;
+    touch-action: none;
   }
   .hud {
     width: min(960px, 100%);
@@ -45,6 +50,7 @@
     align-items: baseline;
     color: var(--muted);
     font-size: 12px;
+    gap: 8px;
   }
   .lives { font-variant-numeric: tabular-nums; letter-spacing: 0.08em; }
   .lives b { color: var(--ink); font-weight: 600; }
@@ -57,10 +63,79 @@
     padding: 1px 5px;
     color: var(--ink);
   }
+  .pads {
+    display: none;
+    width: min(960px, 100%);
+    justify-content: space-between;
+    gap: 16px;
+    pointer-events: none;
+  }
+  .pad {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(52px, 64px));
+    gap: 6px;
+    pointer-events: auto;
+  }
+  .pad button {
+    appearance: none;
+    border: 1px solid #333;
+    border-radius: 10px;
+    background: rgba(28, 25, 23, 0.85);
+    color: var(--ink);
+    font: 600 18px/1 ui-sans-serif, system-ui, sans-serif;
+    height: 52px;
+    touch-action: none;
+  }
+  .pad button:active, .pad button.held {
+    background: rgba(94, 106, 210, 0.35);
+    border-color: rgba(94, 106, 210, 0.55);
+  }
+  .pad.right button:active, .pad.right button.held {
+    background: rgba(232, 166, 145, 0.35);
+    border-color: rgba(232, 166, 145, 0.55);
+  }
+  .hint-desk { display: block; }
+  .rotate {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: var(--bg);
+    color: var(--ink);
+    place-items: center;
+    text-align: center;
+    padding: 32px;
+    gap: 12px;
+  }
+  .rotate p { color: var(--muted); max-width: 16rem; }
+  .rotate .glyph {
+    font: 600 48px/1 ui-monospace, Menlo, monospace;
+    letter-spacing: 0.05em;
+    color: var(--left);
+  }
+
+  /* Phone portrait: block play and ask for landscape */
+  @media (orientation: portrait) and (max-width: 900px) {
+    .play { display: none !important; }
+    .rotate { display: grid; }
+  }
+  @media (orientation: landscape) and (max-height: 560px),
+         (pointer: coarse) and (orientation: landscape) {
+    .pads { display: flex; }
+    .hint-desk { display: none; }
+    body { padding: 6px; gap: 4px; }
+    canvas { max-height: calc(100dvh - 120px); }
+  }
 </style>
 </head>
 <body>
-  <div class="hud">
+  <div class="rotate" id="rotate" aria-live="polite">
+    <div class="glyph">↻</div>
+    <h1>Turn sideways</h1>
+    <p>Mininja-vball needs landscape on phones.</p>
+  </div>
+
+  <div class="play hud">
     <h1>Mininja-vball</h1>
     <div class="lives" id="lives">
       <span class="L">LEFT</span> <b id="lifeL">●●●●●</b>
@@ -68,9 +143,22 @@
       <b id="lifeR">●●●●●</b> <span class="R">RIGHT</span>
     </div>
   </div>
-  <canvas id="c" width="960" height="540"></canvas>
-  <div class="hud">
-    <div><kbd>A</kbd><kbd>D</kbd><kbd>W</kbd> left · <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd> right · <kbd>Esc</kbd> pause · <kbd>R</kbd> reset</div>
+  <canvas class="play" id="c" width="960" height="540"></canvas>
+  <div class="play pads" id="pads" aria-label="Touch controls">
+    <div class="pad left" data-side="L">
+      <button type="button" data-act="left">◀</button>
+      <button type="button" data-act="jump">▲</button>
+      <button type="button" data-act="right">▶</button>
+    </div>
+    <div class="pad right" data-side="R">
+      <button type="button" data-act="left">◀</button>
+      <button type="button" data-act="jump">▲</button>
+      <button type="button" data-act="right">▶</button>
+    </div>
+  </div>
+  <div class="play hud">
+    <div class="hint-desk"><kbd>A</kbd><kbd>D</kbd><kbd>W</kbd> left · <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd> right · <kbd>Esc</kbd> pause · <kbd>R</kbd> reset</div>
+    <div class="hint-touch" style="display:none;color:var(--muted)">Pads move each side · tap court to rematch</div>
     <div>unnamed mark · MIT · Thingscorp</div>
   </div>
 <script>
@@ -82,15 +170,45 @@
   const NET_X = W / 2;
   const NET_W = 10;
   const NET_H = 90;
-  const R_PAL = 44;
+  const CELL = 16;          // kit 5×3 cell
+  const MARK_W = CELL * 5;
+  const MARK_H = CELL * 3;
   const R_BALL = 12;
+  const HIT_R = MARK_W * 0.42; // bounce radius around mark center
   const MAX_LIVES = 5;
   const G = 2200;
   const MOVE = 420;
   const JUMP = 820;
   const MAX_BALL = 920;
 
+  // Kit mark DNA: glyphs ARE the mark (idle facing right / mirrored left)
+  // ▚████ / ██ ●● / ▀▀▀▀▀
   const keys = new Set();
+  const touch = {
+    L: { left: false, right: false, jump: false },
+    R: { left: false, right: false, jump: false },
+  };
+
+  function tryLockLandscape() {
+    const o = screen.orientation;
+    if (!o || typeof o.lock !== "function") return;
+    o.lock("landscape").catch(() => {});
+  }
+  tryLockLandscape();
+  addEventListener("orientationchange", tryLockLandscape);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) tryLockLandscape();
+  });
+
+  // show touch hint when pads visible
+  const mq = matchMedia("(pointer: coarse), (orientation: landscape) and (max-height: 560px)");
+  const syncHint = () => {
+    const coarse = matchMedia("(pointer: coarse)").matches || matchMedia("(max-height: 560px) and (orientation: landscape)").matches;
+    document.querySelector(".hint-touch").style.display = coarse ? "block" : "none";
+  };
+  syncHint();
+  mq.addEventListener?.("change", syncHint);
+
   addEventListener("keydown", (e) => {
     keys.add(e.code);
     if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space"].includes(e.code)) e.preventDefault();
@@ -98,6 +216,34 @@
     if (e.code === "KeyR") resetMatch();
   });
   addEventListener("keyup", (e) => keys.delete(e.code));
+
+  // Touch pads
+  function bindPad(root) {
+    const side = root.dataset.side;
+    const set = (act, on) => {
+      if (act === "left") touch[side].left = on;
+      if (act === "right") touch[side].right = on;
+      if (act === "up" || act === "jump") touch[side].jump = on;
+    };
+    root.querySelectorAll("button").forEach((btn) => {
+      const act = btn.dataset.act;
+      const down = (e) => { e.preventDefault(); btn.classList.add("held"); set(act, true); };
+      const up = (e) => { e.preventDefault(); btn.classList.remove("held"); set(act, false); };
+      btn.addEventListener("pointerdown", down);
+      btn.addEventListener("pointerup", up);
+      btn.addEventListener("pointercancel", up);
+      btn.addEventListener("pointerleave", up);
+    });
+  }
+  document.querySelectorAll(".pad").forEach(bindPad);
+
+  // Tap court to rematch when over / unpause
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    tryLockLandscape();
+    if (state.over) { resetMatch(); return; }
+    if (state.paused) state.paused = false;
+  });
 
   function pal(side) {
     const left = side === "L";
@@ -111,6 +257,7 @@
       color: left ? "#5e6ad2" : "#e8a691",
       eye: left ? "#f5ebe0" : "#1c1917",
       lives: MAX_LIVES,
+      facing: left ? 1 : -1, // +1 looks right (canonical)
     };
   }
 
@@ -120,18 +267,18 @@
     ball: { x: W * 0.25, y: GROUND - 160, vx: 60, vy: 0 },
     serve: "L",
     paused: false,
-    over: null, // "L" | "R" winner
+    over: null,
     flash: 0,
     t: 0,
   };
 
   function resetPoint(to) {
     state.serve = to;
-    state.L.x = W * 0.25; state.L.y = GROUND; state.L.vx = 0; state.L.vy = 0;
-    state.R.x = W * 0.75; state.R.y = GROUND; state.R.vx = 0; state.R.vy = 0;
+    state.L.x = W * 0.25; state.L.y = GROUND; state.L.vx = 0; state.L.vy = 0; state.L.facing = 1;
+    state.R.x = W * 0.75; state.R.y = GROUND; state.R.vx = 0; state.R.vy = 0; state.R.facing = -1;
     const s = to === "L" ? state.L : state.R;
     state.ball.x = s.x;
-    state.ball.y = GROUND - R_PAL - R_BALL - 8;
+    state.ball.y = GROUND - MARK_H - R_BALL - 4;
     state.ball.vx = to === "L" ? 80 : -80;
     state.ball.vy = -40;
     state.flash = 0.35;
@@ -152,12 +299,26 @@
     document.getElementById("lifeR").textContent = dots(state.R.lives);
   }
 
-  function control(p, left, right, jump) {
+  function want(side, dir) {
+    if (side === "L") {
+      if (dir === "left") return keys.has("KeyA") || touch.L.left;
+      if (dir === "right") return keys.has("KeyD") || touch.L.right;
+      if (dir === "jump") return keys.has("KeyW") || touch.L.jump;
+    } else {
+      if (dir === "left") return keys.has("ArrowLeft") || touch.R.left;
+      if (dir === "right") return keys.has("ArrowRight") || touch.R.right;
+      if (dir === "jump") return keys.has("ArrowUp") || touch.R.jump;
+    }
+    return false;
+  }
+
+  function control(p) {
     let ax = 0;
-    if (keys.has(left)) ax -= 1;
-    if (keys.has(right)) ax += 1;
+    if (want(p.side, "left")) ax -= 1;
+    if (want(p.side, "right")) ax += 1;
     p.vx = ax * MOVE;
-    if (jump && p.onGround) {
+    if (ax !== 0) p.facing = ax > 0 ? 1 : -1;
+    if (want(p.side, "jump") && p.onGround) {
       p.vy = -JUMP;
       p.onGround = false;
     }
@@ -167,8 +328,9 @@
     p.vy += G * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    const minX = p.side === "L" ? R_PAL + 4 : NET_X + NET_W / 2 + R_PAL + 2;
-    const maxX = p.side === "L" ? NET_X - NET_W / 2 - R_PAL - 2 : W - R_PAL - 4;
+    const half = MARK_W / 2;
+    const minX = p.side === "L" ? half + 4 : NET_X + NET_W / 2 + half + 2;
+    const maxX = p.side === "L" ? NET_X - NET_W / 2 - half - 2 : W - half - 4;
     p.x = Math.max(minX, Math.min(maxX, p.x));
     if (p.y >= GROUND) {
       p.y = GROUND;
@@ -187,10 +349,12 @@
   }
 
   function bounceBallOffPal(p) {
-    // Upper semicircle only: collide if ball center is above the pal centerline
-    const hit = circleHit(p.x, p.y, R_PAL, state.ball.x, state.ball.y, R_BALL);
+    // Hit sphere centered in the mark body (row of eyes)
+    const cx = p.x;
+    const cy = p.y - MARK_H * 0.55;
+    const hit = circleHit(cx, cy, HIT_R, state.ball.x, state.ball.y, R_BALL);
     if (!hit) return;
-    if (state.ball.y > p.y + 4) return; // under the flat bottom — ignore
+    if (state.ball.y > p.y + 2) return;
     const nx = hit.dx / hit.d, ny = hit.dy / hit.d;
     state.ball.x += nx * hit.overlap;
     state.ball.y += ny * hit.overlap;
@@ -201,7 +365,6 @@
       rvx -= 1.85 * vn * nx;
       rvy -= 1.85 * vn * ny;
     }
-    // kick upward bias when near top of the pal
     if (ny < -0.2) rvy -= 120;
     state.ball.vx = rvx + p.vx * 0.35;
     state.ball.vy = rvy + p.vy * 0.2;
@@ -222,16 +385,13 @@
     b.x += b.vx * dt;
     b.y += b.vy * dt;
 
-    // walls
     if (b.x < R_BALL) { b.x = R_BALL; b.vx = Math.abs(b.vx) * 0.92; }
     if (b.x > W - R_BALL) { b.x = W - R_BALL; b.vx = -Math.abs(b.vx) * 0.92; }
     if (b.y < R_BALL) { b.y = R_BALL; b.vy = Math.abs(b.vy) * 0.9; }
 
-    // net (thin AABB vs circle)
     const netL = NET_X - NET_W / 2, netR = NET_X + NET_W / 2;
     const netTop = GROUND - NET_H;
     if (b.x + R_BALL > netL && b.x - R_BALL < netR && b.y + R_BALL > netTop && b.y < GROUND) {
-      // push out horizontally preferred
       const pushL = Math.abs((b.x + R_BALL) - netL);
       const pushR = Math.abs(netR - (b.x - R_BALL));
       if (b.y + R_BALL - netTop < Math.min(pushL, pushR) && b.vy > 0) {
@@ -249,7 +409,6 @@
     bounceBallOffPal(state.L);
     bounceBallOffPal(state.R);
 
-    // ground point
     if (b.y + R_BALL >= GROUND) {
       const loser = b.x < NET_X ? "L" : "R";
       const other = loser === "L" ? "R" : "L";
@@ -270,45 +429,87 @@
     g.addColorStop(1, "#0c0b0a");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
-    // faint stage grid
     ctx.strokeStyle = "rgba(94,106,210,0.06)";
     ctx.lineWidth = 1;
     for (let x = 40; x < W; x += 48) {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GROUND); ctx.stroke();
     }
-    // ground
     ctx.fillStyle = "#1c1917";
     ctx.fillRect(0, GROUND, W, H - GROUND);
     ctx.fillStyle = "rgba(94,106,210,0.35)";
     ctx.fillRect(0, GROUND, W, 3);
-    // net
     ctx.fillStyle = "#78716c";
     ctx.fillRect(NET_X - NET_W / 2, GROUND - NET_H, NET_W, NET_H);
     ctx.fillStyle = "#a8a29e";
     ctx.fillRect(NET_X - 14, GROUND - NET_H - 6, 28, 8);
   }
 
+  /** Draw kit 5×3 idle mark. facing +1 = canonical (hood left, eyes right). */
   function drawPal(p) {
+    const c = CELL;
+    const left = p.x - MARK_W / 2;
+    const top = p.y - MARK_H;
+    const faceRight = p.facing >= 0;
+
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, R_PAL, Math.PI, 0);
-    ctx.closePath();
     ctx.fillStyle = p.color;
-    ctx.fill();
-    // Mininja-ish eyes (two dots in the “visor”)
-    const facing = p.vx === 0 ? (p.side === "L" ? 1 : -1) : Math.sign(p.vx) || 1;
-    const eyeY = p.y - R_PAL * 0.45;
-    const baseX = p.x + facing * 6;
+
+    // helper: cell (col 0..4, row 0..2) in face-right space
+    const cell = (col, row) => {
+      const x = faceRight ? left + col * c : left + (4 - col) * c;
+      return { x, y: top + row * c };
+    };
+    const full = (col, row) => {
+      const { x, y } = cell(col, row);
+      ctx.fillRect(x, y, c, c);
+    };
+    const upper = (col, row) => {
+      const { x, y } = cell(col, row);
+      ctx.fillRect(x, y, c, c / 2);
+    };
+    // hood corner ▚ = upper-right + lower-left triangles of cell (0,0) when facing right
+    // U+259A QUADRANT UPPER LEFT AND LOWER RIGHT — wait, mark uses U+259A ▚
+    // From mark.json: hoodCornerRightFacing U+259A
+    // Visual in SVG: first cell is ▚ which in many fonts is UL+LR (checker).
+    // Canonical art comment in SVG: ▚████ with hood on the LEFT of the facing-right mark.
+    // Idle SVG places ▚ at leftmost top — the "dog-ear" / hood notch.
+    // Drawing as: fill bottom-left triangle + top-right triangle of cell, OR simpler:
+    // fill full cell then cut top-left with bg — cleaner: path for ▚ as two triangles.
+    const hood = (col, row) => {
+      const { x, y } = cell(col, row);
+      ctx.beginPath();
+      // ▚ = NE + SW quadrants (upper-right + lower-left)
+      ctx.moveTo(x + c, y);
+      ctx.lineTo(x + c, y + c / 2);
+      ctx.lineTo(x + c / 2, y + c / 2);
+      ctx.lineTo(x + c / 2, y);
+      ctx.closePath();
+      ctx.moveTo(x, y + c / 2);
+      ctx.lineTo(x + c / 2, y + c / 2);
+      ctx.lineTo(x + c / 2, y + c);
+      ctx.lineTo(x, y + c);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    // Row 0: hood + 4 full
+    hood(0, 0);
+    full(1, 0); full(2, 0); full(3, 0); full(4, 0);
+    // Row 1: 2 full, gap, eyes in cols 3-4 (drawn after)
+    full(0, 1); full(1, 1);
+    // Row 2: upper halves
+    for (let i = 0; i < 5; i++) upper(i, 2);
+
+    // Eyes ●● in cols 3,4 of row 1
     ctx.fillStyle = p.eye;
-    ctx.beginPath(); ctx.arc(baseX - 9, eyeY, 4.2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(baseX + 9, eyeY, 4.2, 0, Math.PI * 2); ctx.fill();
-    // tiny hood notch hint (mark DNA without full glyph)
-    ctx.strokeStyle = "rgba(0,0,0,0.2)";
-    ctx.lineWidth = 3;
+    const e1 = cell(3, 1);
+    const e2 = cell(4, 1);
+    const er = c * 0.28;
     ctx.beginPath();
-    ctx.moveTo(p.x - R_PAL * 0.55, p.y - R_PAL * 0.15);
-    ctx.quadraticCurveTo(p.x - R_PAL * 0.7, p.y - R_PAL * 0.55, p.x - R_PAL * 0.25, p.y - R_PAL * 0.75);
-    ctx.stroke();
+    ctx.arc(e1.x + c / 2, e1.y + c / 2, er, 0, Math.PI * 2);
+    ctx.arc(e2.x + c / 2, e2.y + c / 2, er, 0, Math.PI * 2);
+    ctx.fill();
+
     ctx.restore();
   }
 
@@ -329,11 +530,10 @@
       ctx.fillStyle = `rgba(245,235,224,${state.flash * 0.25})`;
       ctx.fillRect(0, 0, W, H);
     }
-    if (state.paused && !state.over) {
-      banner("paused");
-    }
+    if (state.paused && !state.over) banner("paused · tap to continue");
     if (state.over) {
-      banner(state.over === "L" ? "left wins · R to rematch" : "right wins · R to rematch");
+      const who = state.over === "L" ? "left" : "right";
+      banner(`${who} wins · tap to rematch`);
     }
   }
 
@@ -354,8 +554,8 @@
     if (state.flash > 0) state.flash = Math.max(0, state.flash - dt);
 
     if (!state.paused && !state.over) {
-      control(state.L, "KeyA", "KeyD", keys.has("KeyW"));
-      control(state.R, "ArrowLeft", "ArrowRight", keys.has("ArrowUp"));
+      control(state.L);
+      control(state.R);
       movePal(state.L, dt);
       movePal(state.R, dt);
       moveBall(dt);

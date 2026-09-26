@@ -4,6 +4,8 @@ Two-player local court game with the unnamed [Mininja](https://github.com/Things
 
 **Play:** https://thingscorp.github.io/mininja-vball/
 
+Phones: landscape only (portrait asks you to rotate). Touch pads on each side.
+
 ## Controls
 
 | Side | Move | Jump |
