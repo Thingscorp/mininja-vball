@@ -61,7 +61,7 @@
 </head>
 <body>
   <div class="hud">
-    <h1>Mininja-vball <span>· side quest</span></h1>
+    <h1>Mininja-vball</h1>
     <div class="lives" id="lives">
       <span class="L">LEFT</span> <b id="lifeL">●●●●●</b>
       &nbsp;·&nbsp;
@@ -82,7 +82,7 @@
   const NET_X = W / 2;
   const NET_W = 10;
   const NET_H = 90;
-  const R_SLIME = 44;
+  const R_PAL = 44;
   const R_BALL = 12;
   const MAX_LIVES = 5;
   const G = 2200;
@@ -99,7 +99,7 @@
   });
   addEventListener("keyup", (e) => keys.delete(e.code));
 
-  function slime(side) {
+  function pal(side) {
     const left = side === "L";
     return {
       side,
@@ -115,8 +115,8 @@
   }
 
   const state = {
-    L: slime("L"),
-    R: slime("R"),
+    L: pal("L"),
+    R: pal("R"),
     ball: { x: W * 0.25, y: GROUND - 160, vx: 60, vy: 0 },
     serve: "L",
     paused: false,
@@ -131,7 +131,7 @@
     state.R.x = W * 0.75; state.R.y = GROUND; state.R.vx = 0; state.R.vy = 0;
     const s = to === "L" ? state.L : state.R;
     state.ball.x = s.x;
-    state.ball.y = GROUND - R_SLIME - R_BALL - 8;
+    state.ball.y = GROUND - R_PAL - R_BALL - 8;
     state.ball.vx = to === "L" ? 80 : -80;
     state.ball.vy = -40;
     state.flash = 0.35;
@@ -163,12 +163,12 @@
     }
   }
 
-  function moveSlime(p, dt) {
+  function movePal(p, dt) {
     p.vy += G * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    const minX = p.side === "L" ? R_SLIME + 4 : NET_X + NET_W / 2 + R_SLIME + 2;
-    const maxX = p.side === "L" ? NET_X - NET_W / 2 - R_SLIME - 2 : W - R_SLIME - 4;
+    const minX = p.side === "L" ? R_PAL + 4 : NET_X + NET_W / 2 + R_PAL + 2;
+    const maxX = p.side === "L" ? NET_X - NET_W / 2 - R_PAL - 2 : W - R_PAL - 4;
     p.x = Math.max(minX, Math.min(maxX, p.x));
     if (p.y >= GROUND) {
       p.y = GROUND;
@@ -186,9 +186,9 @@
     return overlap > 0 ? { dx, dy, d, overlap } : null;
   }
 
-  function bounceBallOffSlime(p) {
-    // Only upper semicircle (classic slime): collide if ball center above slime centerline-ish
-    const hit = circleHit(p.x, p.y, R_SLIME, state.ball.x, state.ball.y, R_BALL);
+  function bounceBallOffPal(p) {
+    // Upper semicircle only: collide if ball center is above the pal centerline
+    const hit = circleHit(p.x, p.y, R_PAL, state.ball.x, state.ball.y, R_BALL);
     if (!hit) return;
     if (state.ball.y > p.y + 4) return; // under the flat bottom — ignore
     const nx = hit.dx / hit.d, ny = hit.dy / hit.d;
@@ -201,7 +201,7 @@
       rvx -= 1.85 * vn * nx;
       rvy -= 1.85 * vn * ny;
     }
-    // kick upward bias when near top of slime
+    // kick upward bias when near top of the pal
     if (ny < -0.2) rvy -= 120;
     state.ball.vx = rvx + p.vx * 0.35;
     state.ball.vy = rvy + p.vy * 0.2;
@@ -246,8 +246,8 @@
       }
     }
 
-    bounceBallOffSlime(state.L);
-    bounceBallOffSlime(state.R);
+    bounceBallOffPal(state.L);
+    bounceBallOffPal(state.R);
 
     // ground point
     if (b.y + R_BALL >= GROUND) {
@@ -288,16 +288,16 @@
     ctx.fillRect(NET_X - 14, GROUND - NET_H - 6, 28, 8);
   }
 
-  function drawSlime(p) {
+  function drawPal(p) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(p.x, p.y, R_SLIME, Math.PI, 0);
+    ctx.arc(p.x, p.y, R_PAL, Math.PI, 0);
     ctx.closePath();
     ctx.fillStyle = p.color;
     ctx.fill();
     // Mininja-ish eyes (two dots in the “visor”)
     const facing = p.vx === 0 ? (p.side === "L" ? 1 : -1) : Math.sign(p.vx) || 1;
-    const eyeY = p.y - R_SLIME * 0.45;
+    const eyeY = p.y - R_PAL * 0.45;
     const baseX = p.x + facing * 6;
     ctx.fillStyle = p.eye;
     ctx.beginPath(); ctx.arc(baseX - 9, eyeY, 4.2, 0, Math.PI * 2); ctx.fill();
@@ -306,8 +306,8 @@
     ctx.strokeStyle = "rgba(0,0,0,0.2)";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(p.x - R_SLIME * 0.55, p.y - R_SLIME * 0.15);
-    ctx.quadraticCurveTo(p.x - R_SLIME * 0.7, p.y - R_SLIME * 0.55, p.x - R_SLIME * 0.25, p.y - R_SLIME * 0.75);
+    ctx.moveTo(p.x - R_PAL * 0.55, p.y - R_PAL * 0.15);
+    ctx.quadraticCurveTo(p.x - R_PAL * 0.7, p.y - R_PAL * 0.55, p.x - R_PAL * 0.25, p.y - R_PAL * 0.75);
     ctx.stroke();
     ctx.restore();
   }
@@ -356,14 +356,14 @@
     if (!state.paused && !state.over) {
       control(state.L, "KeyA", "KeyD", keys.has("KeyW"));
       control(state.R, "ArrowLeft", "ArrowRight", keys.has("ArrowUp"));
-      moveSlime(state.L, dt);
-      moveSlime(state.R, dt);
+      movePal(state.L, dt);
+      movePal(state.R, dt);
       moveBall(dt);
     }
 
     drawBackground();
-    drawSlime(state.L);
-    drawSlime(state.R);
+    drawPal(state.L);
+    drawPal(state.R);
     drawBall();
     drawOverlay();
     requestAnimationFrame(frame);
