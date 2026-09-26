@@ -32,6 +32,18 @@
     -webkit-user-select: none;
   }
   h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.04em; }
+  .wip-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(234, 179, 8, 0.45);
+    color: #eab308;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    vertical-align: 1px;
+  }
   canvas {
     display: block;
     width: min(960px, 100%);
@@ -136,7 +148,7 @@
   </div>
 
   <div class="play hud">
-    <h1>Mininja-vball</h1>
+    <h1>Mininja-vball <span class="wip-badge">WIP</span></h1>
     <div class="lives" id="lives">
       <span class="L">LEFT</span> <b id="lifeL">●●●●●</b>
       &nbsp;·&nbsp;

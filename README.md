@@ -1,5 +1,7 @@
 # Mininja-vball
 
+**WIP — not publication-ready.** Rough prototype. Expect jank.
+
 Two-player local court game with the unnamed [Mininja](https://github.com/Thingscorp/mininja) mark.
 
 **Play:** https://thingscorp.github.io/mininja-vball/
